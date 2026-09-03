@@ -1,0 +1,149 @@
+name: javhub
+
+x-postgres-env: &postgres-env
+  POSTGRES_DB: ${POSTGRES_DB:-r18}
+  POSTGRES_USER: ${POSTGRES_USER:-javhub}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+  JAVHUB_DB_NAME: ${JAVHUB_DB_NAME:-javhub}
+
+x-javinfoapi-env: &javinfoapi-env
+  APP_ENV: production
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: ${DB_USER:-javhub}
+  DB_PASSWORD: ${DB_PASSWORD:-change-me}
+  DB_NAME: ${DB_NAME:-r18}
+  DB_MAX_CONN: ${DB_MAX_CONN:-20}
+  DB_MIN_CONN: ${DB_MIN_CONN:-5}
+  SERVER_HOST: 0.0.0.0
+  SERVER_PORT: 18080
+  SUPPLEMENT_ADMIN_TOKEN: ${SUPPLEMENT_ADMIN_TOKEN:-change-me}
+  JAVINFO_CF_SOLVER_URL: http://flaresolverr:8191/v1
+  CORS_ALLOW_ORIGINS: http://javhub
+  JAVHUB_LICENSE_KEY: ${JAVHUB_LICENSE_KEY:-}
+  JAVHUB_LICENSE_REFRESH_SECONDS: ${JAVHUB_LICENSE_REFRESH_SECONDS:-3600}
+  JAVHUB_LICENSE_STATE_DIR: /config
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - javhub-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      <<: *postgres-env
+    volumes:
+      - javinfo-postgres:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  javinfoapi:
+    image: ghcr.io/kongmei-ovo/javinfoapi-protected:stable
+    restart: unless-stopped
+    environment:
+      <<: *javinfoapi-env
+    volumes:
+      - ./config:/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: unless-stopped
+    mem_limit: 768m
+    environment:
+      LOG_LEVEL: ${FLARESOLVERR_LOG_LEVEL:-info}
+      TZ: ${TZ:-Asia/Shanghai}
+
+  avdb:
+    image: ${AVDB_IMAGE:-leolitaly/avdb:latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////data/avdb.db
+      TZ: ${TZ:-Asia/Shanghai}
+      FLARE_SOLVERR_URL: http://flaresolverr:8191/v1
+      CF_BYPASS_PROVIDER: flaresolverr
+    volumes:
+      - avdb-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/users/initialized', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  javhub:
+    image: ghcr.io/kongmei-ovo/javhub-protected:stable
+    restart: unless-stopped
+    environment:
+      JAVHUB_CONFIG_PATH: /config/config.yaml
+      JAVINFO_API_URL: http://javinfoapi:18080
+      SUPPLEMENT_ADMIN_TOKEN: ${SUPPLEMENT_ADMIN_TOKEN:-change-me}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-javhub}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      DB_NAME: ${DB_NAME:-r18}
+      JAVHUB_DB_HOST: postgres
+      JAVHUB_DB_PORT: 5432
+      JAVHUB_DB_USER: ${DB_USER:-javhub}
+      JAVHUB_DB_PASSWORD: ${JAVHUB_DB_PASSWORD:-change-me}
+      JAVHUB_DB_NAME: ${JAVHUB_DB_NAME:-javhub}
+      OPENLIST_USERNAME: ${OPENLIST_USERNAME:-}
+      OPENLIST_PASSWORD: ${OPENLIST_PASSWORD:-}
+      EMBY_API_URL: ${EMBY_API_URL:-}
+      EMBY_API_KEY: ${EMBY_API_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      JAVHUB_CACHE_BACKEND: redis
+      JAVHUB_REDIS_URL: redis://redis:6379/0
+      JAVHUB_REDIS_PREFIX: javhub-cache
+      JAVHUB_AVDB_API_URL: http://avdb:8000
+      JAVHUB_AVDB_API_KEY: ${JAVHUB_AVDB_API_KEY:-}
+      COOKIE115_MIN_REQUEST_INTERVAL: ${COOKIE115_MIN_REQUEST_INTERVAL:-1.25}
+      JAVHUB_SINGBOX_LISTEN_HOST: 0.0.0.0
+      JAVHUB_PROXY_ADVERTISE_HOST: javhub
+      JAVHUB_LICENSE_KEY: ${JAVHUB_LICENSE_KEY:-}
+      JAVHUB_LICENSE_REFRESH_SECONDS: ${JAVHUB_LICENSE_REFRESH_SECONDS:-3600}
+      JAVHUB_LICENSE_STATE_DIR: /config
+    volumes:
+      - ./data:/app/data
+      - ./config:/config
+    ports:
+      - "${JAVHUB_PORT:-3000}:80"
+    depends_on:
+      javinfoapi:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_started
+      avdb:
+        condition: service_healthy
+
+volumes:
+  javinfo-postgres:
+  javhub-redis:
+  avdb-data:
