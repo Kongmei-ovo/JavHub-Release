@@ -1,31 +1,34 @@
-# JavHub 安装
+# JavHub Installation
 
-本仓库只提供安装文件；JavHub 和 JavInfoApi 源码不公开。
+This repository only provides installation files. The source code for JavHub and JavInfoApi is not publicly available.
 
-在 Linux amd64 或 arm64 服务器上安装 Docker Compose 后，执行：
+On a Linux amd64 or arm64 server, install Docker Compose and then run:
 
 ```bash
 git clone https://github.com/Kongmei-ovo/JavHub-Release.git
 cd JavHub-Release
 cp .env.example .env
-# 编辑 .env：将所有 change-me 改为你自己的密码；JAVHUB_LICENSE_KEY 暂时留空
+# Edit .env: replace all "change-me" values with your own passwords.
+# Leave JAVHUB_LICENSE_KEY empty for now.
 docker compose pull
 docker compose up -d
 docker compose logs javinfoapi
 ```
 
-日志会显示以 `jvh-` 开头的实例 ID。将该 ID 发给发布者，收到激活码后填入 `.env` 的 `JAVHUB_LICENSE_KEY`，然后执行：
+The logs will display an instance ID starting with `jvh-`. Send this ID to the publisher. After receiving the activation key, set it as `JAVHUB_LICENSE_KEY` in `.env`, then run:
 
 ```bash
 docker compose up -d
 ```
 
-打开 `http://服务器IP:3000` 即可使用。
+Open `http://SERVER_IP:3000` in your browser to access JavHub.
 
-更新版本：
+To update to the latest version:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-请备份 `./config`、`./data` 和 Docker 数据卷。一个激活码只授权一个安装实例。
+Please back up `./config`, `./data`, and the Docker volumes regularly.
+
+Each activation key is licensed for one installation instance only.
