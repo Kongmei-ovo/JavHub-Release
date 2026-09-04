@@ -1,27 +1,41 @@
 name: javhub
 
+# ======================== 用户配置（只修改这里）========================
+# 首次部署前，请把下面两项改成你自己的强密码/随机字符串。
+x-db-password: &db-password "change-me-database-password"
+x-admin-token: &admin-token "change-me-admin-token"
+
+# 首次启动时保持为空。把日志中的 jvh- 实例 ID 发给发布者，
+# 收到激活码后粘贴到引号内，再执行：docker compose up -d
+x-license-key: &license-key ""
+
+# 可选：按需修改时区和 Web 访问端口。
+x-timezone: &timezone "Asia/Shanghai"
+x-web-port: &web-port "3000"
+# ======================================================================
+
 x-postgres-env: &postgres-env
-  POSTGRES_DB: ${POSTGRES_DB:-r18}
-  POSTGRES_USER: ${POSTGRES_USER:-javhub}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-  JAVHUB_DB_NAME: ${JAVHUB_DB_NAME:-javhub}
+  POSTGRES_DB: r18
+  POSTGRES_USER: javhub
+  POSTGRES_PASSWORD: *db-password
+  JAVHUB_DB_NAME: javhub
 
 x-javinfoapi-env: &javinfoapi-env
   APP_ENV: production
   DB_HOST: postgres
   DB_PORT: 5432
-  DB_USER: ${DB_USER:-javhub}
-  DB_PASSWORD: ${DB_PASSWORD:-change-me}
-  DB_NAME: ${DB_NAME:-r18}
-  DB_MAX_CONN: ${DB_MAX_CONN:-20}
-  DB_MIN_CONN: ${DB_MIN_CONN:-5}
+  DB_USER: javhub
+  DB_PASSWORD: *db-password
+  DB_NAME: r18
+  DB_MAX_CONN: 20
+  DB_MIN_CONN: 5
   SERVER_HOST: 0.0.0.0
   SERVER_PORT: 18080
-  SUPPLEMENT_ADMIN_TOKEN: ${SUPPLEMENT_ADMIN_TOKEN:-change-me}
+  SUPPLEMENT_ADMIN_TOKEN: *admin-token
   JAVINFO_CF_SOLVER_URL: http://flaresolverr:8191/v1
   CORS_ALLOW_ORIGINS: http://javhub
-  JAVHUB_LICENSE_KEY: ${JAVHUB_LICENSE_KEY:-}
-  JAVHUB_LICENSE_REFRESH_SECONDS: ${JAVHUB_LICENSE_REFRESH_SECONDS:-3600}
+  JAVHUB_LICENSE_KEY: *license-key
+  JAVHUB_LICENSE_REFRESH_SECONDS: 3600
   JAVHUB_LICENSE_STATE_DIR: /config
 
 services:
@@ -44,13 +58,29 @@ services:
       <<: *postgres-env
     volumes:
       - javinfo-postgres:/var/lib/postgresql/data
-      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       start_period: 60s
       retries: 5
+
+  # 一次性初始化 JavHub 数据库；成功后退出属于正常状态。
+  postgres-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: *db-password
+    command:
+      - sh
+      - -ec
+      - |
+        if ! psql -h postgres -U javhub -d r18 -tAc "SELECT 1 FROM pg_database WHERE datname='javhub'" | grep -q 1; then
+          psql -h postgres -U javhub -d r18 -c "CREATE DATABASE javhub"
+        fi
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   javinfoapi:
     image: ghcr.io/kongmei-ovo/javinfoapi-protected:stable
@@ -62,6 +92,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18080/health"]
       interval: 30s
@@ -74,15 +106,15 @@ services:
     restart: unless-stopped
     mem_limit: 768m
     environment:
-      LOG_LEVEL: ${FLARESOLVERR_LOG_LEVEL:-info}
-      TZ: ${TZ:-Asia/Shanghai}
+      LOG_LEVEL: info
+      TZ: *timezone
 
   avdb:
-    image: ${AVDB_IMAGE:-leolitaly/avdb:latest}
+    image: leolitaly/avdb:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: sqlite:////data/avdb.db
-      TZ: ${TZ:-Asia/Shanghai}
+      TZ: *timezone
       FLARE_SOLVERR_URL: http://flaresolverr:8191/v1
       CF_BYPASS_PROVIDER: flaresolverr
     volumes:
@@ -100,38 +132,41 @@ services:
     environment:
       JAVHUB_CONFIG_PATH: /config/config.yaml
       JAVINFO_API_URL: http://javinfoapi:18080
-      SUPPLEMENT_ADMIN_TOKEN: ${SUPPLEMENT_ADMIN_TOKEN:-change-me}
+      SUPPLEMENT_ADMIN_TOKEN: *admin-token
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: ${DB_USER:-javhub}
-      DB_PASSWORD: ${DB_PASSWORD:-change-me}
-      DB_NAME: ${DB_NAME:-r18}
+      DB_USER: javhub
+      DB_PASSWORD: *db-password
+      DB_NAME: r18
       JAVHUB_DB_HOST: postgres
       JAVHUB_DB_PORT: 5432
-      JAVHUB_DB_USER: ${DB_USER:-javhub}
-      JAVHUB_DB_PASSWORD: ${JAVHUB_DB_PASSWORD:-change-me}
-      JAVHUB_DB_NAME: ${JAVHUB_DB_NAME:-javhub}
-      OPENLIST_USERNAME: ${OPENLIST_USERNAME:-}
-      OPENLIST_PASSWORD: ${OPENLIST_PASSWORD:-}
-      EMBY_API_URL: ${EMBY_API_URL:-}
-      EMBY_API_KEY: ${EMBY_API_KEY:-}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      JAVHUB_DB_USER: javhub
+      JAVHUB_DB_PASSWORD: *db-password
+      JAVHUB_DB_NAME: javhub
+      # 以下第三方集成均为可选；不使用时保持为空。
+      OPENLIST_USERNAME: "" # OpenList 用户名
+      OPENLIST_PASSWORD: "" # OpenList 密码
+      EMBY_API_URL: "" # 例如：http://emby:8096
+      EMBY_API_KEY: "" # Emby API Key
+      TELEGRAM_BOT_TOKEN: "" # Telegram Bot Token
       JAVHUB_CACHE_BACKEND: redis
       JAVHUB_REDIS_URL: redis://redis:6379/0
       JAVHUB_REDIS_PREFIX: javhub-cache
       JAVHUB_AVDB_API_URL: http://avdb:8000
-      JAVHUB_AVDB_API_KEY: ${JAVHUB_AVDB_API_KEY:-}
-      COOKIE115_MIN_REQUEST_INTERVAL: ${COOKIE115_MIN_REQUEST_INTERVAL:-1.25}
+      JAVHUB_AVDB_API_KEY: "" # 可选的 AVDB API Key
+      COOKIE115_MIN_REQUEST_INTERVAL: 1.25
       JAVHUB_SINGBOX_LISTEN_HOST: 0.0.0.0
       JAVHUB_PROXY_ADVERTISE_HOST: javhub
-      JAVHUB_LICENSE_KEY: ${JAVHUB_LICENSE_KEY:-}
-      JAVHUB_LICENSE_REFRESH_SECONDS: ${JAVHUB_LICENSE_REFRESH_SECONDS:-3600}
+      JAVHUB_LICENSE_KEY: *license-key
+      JAVHUB_LICENSE_REFRESH_SECONDS: 3600
       JAVHUB_LICENSE_STATE_DIR: /config
     volumes:
       - ./data:/app/data
       - ./config:/config
     ports:
-      - "${JAVHUB_PORT:-3000}:80"
+      - target: 80
+        published: *web-port
+        protocol: tcp
     depends_on:
       javinfoapi:
         condition: service_healthy
