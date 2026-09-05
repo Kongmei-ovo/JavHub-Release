@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
-      - javhub-redis:/data
+      - ./storage/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -56,10 +56,10 @@ services:
     environment:
       <<: *postgres-env
     volumes:
-      - javinfo-postgres:/var/lib/postgresql/data
+      - ./storage/postgres:/var/lib/postgresql/data
       # 与一次性初始化服务共享本机 socket。这样即使持久卷里还是旧密码，
       # postgres-init 也能在不删除数据的前提下同步为文件顶部的新密码。
-      - postgres-socket:/var/run/postgresql
+      - ./storage/postgres-socket:/var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -76,7 +76,7 @@ services:
       <<: *postgres-env
       PGHOST: /var/run/postgresql
     volumes:
-      - postgres-socket:/var/run/postgresql
+      - ./storage/postgres-socket:/var/run/postgresql
     command:
       - sh
       - -ec
@@ -131,7 +131,7 @@ services:
       FLARE_SOLVERR_URL: http://flaresolverr:8191/v1
       CF_BYPASS_PROVIDER: flaresolverr
     volumes:
-      - avdb-data:/data
+      - ./storage/avdb:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/users/initialized', timeout=5).read()"]
       interval: 30s
@@ -192,9 +192,3 @@ services:
         condition: service_started
       avdb:
         condition: service_healthy
-
-volumes:
-  javinfo-postgres:
-  postgres-socket:
-  javhub-redis:
-  avdb-data:

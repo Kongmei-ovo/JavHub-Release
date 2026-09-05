@@ -39,6 +39,17 @@ docker compose pull
 docker compose up -d
 ```
 
+所有持久化内容都直接保存在安装目录中，不使用 Docker 命名卷：
+
+| 内容 | 宿主机路径 |
+| --- | --- |
+| JavHub 与授权配置 | `./config` |
+| JavHub 运行数据 | `./data` |
+| PostgreSQL | `./storage/postgres` |
+| Redis | `./storage/redis` |
+| AVdb | `./storage/avdb` |
+| PostgreSQL 本机 socket | `./storage/postgres-socket` |
+
 `docker-compose.yml` 顶部有一块标注为“用户配置（只修改这里）”的区域。上面的命令已经自动填写密码；第一次启动时，让 `x-license-key` 保持为空。
 
 如果你使用 1Panel、Portainer、群晖 Container Manager 等图形界面，也可以直接复制 [`docker-compose.yml`](docker-compose.yml) 的全部内容创建 Compose 项目。创建前只需在文件顶部修改以下内容：
@@ -51,7 +62,7 @@ docker compose up -d
 
 数据库密码只定义一次，并由所有相关服务共用，不要修改文件下面的数据库连接配置。
 
-如果曾经启动过后又修改数据库密码，也不需要删除 PostgreSQL 数据卷。再次执行 `docker compose up -d` 时，`postgres-init` 会通过容器内 Unix socket 将已有数据库用户同步为文件顶部的新密码，并补建缺失的 `javhub` 数据库。成功后显示为 `exited (0)` 或“已停止”是正常状态。
+如果曾经启动过后又修改数据库密码，也不需要删除 PostgreSQL 数据目录。再次执行 `docker compose up -d` 时，`postgres-init` 会通过共享的 Unix socket 将已有数据库用户同步为文件顶部的新密码，并补建缺失的 `javhub` 数据库。成功后显示为 `exited (0)` 或“已停止”是正常状态。
 
 镜像下载和数据库初始化可能需要几分钟。用下面的命令查看状态：
 
@@ -103,6 +114,25 @@ docker compose up -d
 
 不要在更新时重新下载并覆盖 `docker-compose.yml`，否则会覆盖你填写的密码和激活码。更新镜像不会删除已有配置和数据。
 
+### 从旧命名卷版本迁移
+
+如果当前安装仍使用 `javinfo-postgres`、`javhub-redis` 或 `avdb-data`，第一次换用新版 Compose 前必须迁移一次。先停止旧容器并创建目录：
+
+```bash
+docker compose down
+mkdir -p storage/postgres storage/redis storage/avdb storage/postgres-socket
+```
+
+默认 Compose 项目名是 `javhub`，执行：
+
+```bash
+docker run --rm -v javhub_javinfo-postgres:/source:ro -v "$PWD/storage/postgres:/target" alpine sh -c 'cp -a /source/. /target/'
+docker run --rm -v javhub_javhub-redis:/source:ro -v "$PWD/storage/redis:/target" alpine sh -c 'cp -a /source/. /target/'
+docker run --rm -v javhub_avdb-data:/source:ro -v "$PWD/storage/avdb:/target" alpine sh -c 'cp -a /source/. /target/'
+```
+
+如果设置过其他 Compose 项目名，请先用 `docker volume ls` 确认真实卷名。迁移完成后再使用新版 `docker-compose.yml` 启动。确认数据库、缓存和 AVdb 数据正常前，不要删除旧命名卷。
+
 ## 常用排错命令
 
 ```bash
@@ -127,8 +157,10 @@ docker compose restart
 
 - `./config`
 - `./data`
-- Docker 数据卷 `javinfo-postgres`、`javhub-redis` 和 `avdb-data`
+- `./storage/postgres`
+- `./storage/redis`
+- `./storage/avdb`
 
-命名卷和宿主机路径映射都只是持久化方式；初始化是否成功与使用哪一种无关。当前版本继续使用命名卷，以免老用户更新 Compose 后因存储路径改变而误以为数据丢失。
+`./storage/postgres-socket` 只保存运行时 socket，不需要备份。新版完全使用宿主机路径映射，复制安装目录即可同时保留配置和数据。
 
 不要删除 `./config`：实例身份保存在这里。一个激活码只授权一个安装实例，把激活码复制到另一台服务器不会形成新的授权。
