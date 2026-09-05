@@ -51,6 +51,8 @@ docker compose up -d
 
 数据库密码只定义一次，并由所有相关服务共用，不要修改文件下面的数据库连接配置。
 
+如果曾经启动过后又修改数据库密码，也不需要删除 PostgreSQL 数据卷。再次执行 `docker compose up -d` 时，`postgres-init` 会通过容器内 Unix socket 将已有数据库用户同步为文件顶部的新密码，并补建缺失的 `javhub` 数据库。成功后显示为 `exited (0)` 或“已停止”是正常状态。
+
 镜像下载和数据库初始化可能需要几分钟。用下面的命令查看状态：
 
 ```bash
@@ -126,5 +128,7 @@ docker compose restart
 - `./config`
 - `./data`
 - Docker 数据卷 `javinfo-postgres`、`javhub-redis` 和 `avdb-data`
+
+命名卷和宿主机路径映射都只是持久化方式；初始化是否成功与使用哪一种无关。当前版本继续使用命名卷，以免老用户更新 Compose 后因存储路径改变而误以为数据丢失。
 
 不要删除 `./config`：实例身份保存在这里。一个激活码只授权一个安装实例，把激活码复制到另一台服务器不会形成新的授权。
