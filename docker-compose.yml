@@ -9,9 +9,10 @@ x-admin-token: &admin-token "change-me-admin-token"
 # 收到激活码后粘贴到引号内，再执行：docker compose up -d
 x-license-key: &license-key ""
 
-# 可选：按需修改时区和 Web 访问端口。
+# 可选：按需修改时区、JavHub Web 端口和 AVDB Web 端口。
 x-timezone: &timezone "Asia/Shanghai"
 x-web-port: &web-port "3000"
+x-avdb-port: &avdb-port "18000"
 # ======================================================================
 
 x-postgres-env: &postgres-env
@@ -125,6 +126,10 @@ services:
   avdb:
     image: leolitaly/avdb:latest
     restart: unless-stopped
+    ports:
+      - target: 8000
+        published: *avdb-port
+        protocol: tcp
     environment:
       DATABASE_URL: sqlite:////data/avdb.db
       TZ: *timezone
