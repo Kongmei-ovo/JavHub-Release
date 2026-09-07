@@ -9,9 +9,10 @@ x-admin-token: &admin-token "change-me-admin-token"
 # 收到激活码后粘贴到引号内，再执行：docker compose up -d
 x-license-key: &license-key ""
 
-# 可选：按需修改时区、JavHub Web 端口和 AVDB Web 端口。
+# 可选：按需修改时区、JavHub Web 端口、媒体服务器端口和 AVDB Web 端口。
 x-timezone: &timezone "Asia/Shanghai"
 x-web-port: &web-port "3000"
+x-media-server-port: &media-server-port "18090"
 x-avdb-port: &avdb-port "18000"
 # ======================================================================
 
@@ -183,6 +184,9 @@ services:
     ports:
       - target: 80
         published: *web-port
+        protocol: tcp
+      - target: 80
+        published: *media-server-port
         protocol: tcp
     depends_on:
       javinfoapi:
