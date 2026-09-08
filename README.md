@@ -65,6 +65,16 @@ http://NAS的IP:3000
 
 `x-media-server-port` 是 NAS/宿主机对外提供的媒体端口。如果修改了它，重新创建 `javhub` 容器后，播放器地址也要使用修改后的端口。JavHub 设置页中的服务端口保持 `18090`，通常无需修改。
 
+### Cloudflare 远程访问
+
+媒体服务器设置中提供两种仅面向 Emby 兼容服务的远程入口：无需账号和域名的临时 Quick Tunnel，以及通过 Cloudflare 授权创建的固定 Tunnel 地址。创建后，将设置页显示的 HTTPS 地址填入播放器。
+
+无需修改本仓库的 Compose，也不要另外添加 `cloudflared` 容器。`cloudflared` 已内嵌在 `javhub-protected` 镜像中，由 JavHub 作为子进程启动和管理。Tunnel 只要求容器能够出站访问 HTTPS；不需要新增宿主机端口、`network_mode: host`、Docker Socket 或 `privileged` 权限。
+
+Tunnel 使用的 Emby 专用内部源站为 `127.0.0.1:8096`，只能在 `javhub` 容器内部访问，绝不能映射到宿主机。现有的 `x-media-server-port`（默认 `18090`）映射只是局域网播放器入口，可以继续保留，但与 Cloudflare Tunnel 无关。
+
+固定 Tunnel 的隧道专用凭据保存在现有的 `./data:/app/data` 挂载中。请勿删除或移除该挂载；更新镜像或重新创建容器后，JavHub 会从其中自动恢复固定 Tunnel。
+
 ## 命令行安装
 
 如果使用普通 Linux 服务器：
@@ -116,6 +126,8 @@ docker compose up -d
 - `storage`
 
 请定期备份这三个目录，不要删除 `config`，否则实例身份可能丢失。
+
+其中 `data` 还保存固定 Cloudflare Tunnel 的隧道专用凭据；删除后将无法在容器更新或重建后自动恢复该 Tunnel。
 
 ## 无法启动
 
