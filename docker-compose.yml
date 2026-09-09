@@ -100,6 +100,10 @@ services:
   javinfoapi:
     image: ghcr.io/kongmei-ovo/javinfoapi-protected:stable
     restart: unless-stopped
+    # 旧持久数据库可能早于补充服务表结构。worker/服务启动前先执行幂等迁移，
+    # 避免缺少 source_fetch_jobs 等表导致容器重启循环。
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["JavInfoApi migrate && exec JavInfoApi"]
     environment:
       <<: *javinfoapi-env
     volumes:
