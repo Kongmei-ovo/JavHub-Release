@@ -100,10 +100,21 @@ services:
   javinfoapi:
     image: ghcr.io/kongmei-ovo/javinfoapi-protected:stable
     restart: unless-stopped
-    # 旧持久数据库可能早于补充服务表结构。worker/服务启动前先执行幂等迁移，
-    # 避免缺少 source_fetch_jobs 等表导致容器重启循环。
+    # worker/服务启动前执行幂等辅助迁移。全新空库尚无 derived_video 时，
+    # 仅延后这一明确的目录迁移前置条件错误；其他迁移错误仍然致命。
     entrypoint: ["/bin/sh", "-c"]
-    command: ["JavInfoApi migrate && exec JavInfoApi"]
+    command:
+      - |
+        if migration_output="$$(JavInfoApi migrate 2>&1)"; then
+          printf '%s\n' "$${migration_output}"
+        elif printf '%s\n' "$${migration_output}" | grep -Fq 'relation "derived_video" does not exist'; then
+          printf '%s\n' "$${migration_output}"
+          echo "Catalog migrations deferred until the first database import"
+        else
+          printf '%s\n' "$${migration_output}" >&2
+          exit 1
+        fi
+        exec JavInfoApi
     environment:
       <<: *javinfoapi-env
     volumes:
