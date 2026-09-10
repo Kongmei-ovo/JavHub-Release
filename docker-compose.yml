@@ -196,13 +196,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/config
-    ports:
-      - target: 80
-        published: *web-port
-        protocol: tcp
-      - target: 80
-        published: *media-server-port
-        protocol: tcp
     depends_on:
       javinfoapi:
         condition: service_healthy
@@ -216,3 +209,36 @@ services:
         condition: service_started
       avdb:
         condition: service_healthy
+
+  # 独立更新网关持续占用用户入口。即使旧版 JavHub 因强制版本检查退出，
+  # 它仍可显示维护页、下载已验证的 stable 镜像并重建两个受保护服务。
+  updater:
+    image: ghcr.io/kongmei-ovo/javhub-updater:stable
+    restart: unless-stopped
+    environment:
+      COMPOSE_PROJECT_NAME: javhub
+      JAVHUB_COMPOSE_FILES: ${PWD}/docker-compose.yml
+      JAVHUB_RELEASE_URL: https://www.javhub.quest/api/v1/release
+      JAVHUB_UPSTREAM_URL: http://javhub:80
+      JAVHUB_UPDATE_CHECK_INTERVAL: 60s
+      JAVHUB_UPDATE_TIMEOUT: 30m
+      JAVHUB_UPDATE_RETRY_MAX: 15m
+    volumes:
+      # Updater 需要 Docker 管理权限才能拉取并重建 JavHub/JavInfoApi。
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 保持宿主机与容器内路径一致，使 Compose 的相对数据目录仍指向
+      # 当前项目目录；config、data、storage 不会因 OTA 被删除。
+      - ${PWD}:${PWD}:ro
+    working_dir: ${PWD}
+    ports:
+      - target: 8080
+        published: *web-port
+        protocol: tcp
+      - target: 8080
+        published: *media-server-port
+        protocol: tcp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/_updater/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

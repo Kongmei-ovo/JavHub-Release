@@ -29,7 +29,8 @@ x-license-key: &license-key ""
 
 ### 3. 启动项目
 
-保存并启动 Compose 项目，等待镜像下载和容器启动完成。
+保存并启动 Compose 项目，等待镜像下载和容器启动完成。新版 Compose 会额外
+启动一个很小的 `updater` 更新网关，并由它占用网页和媒体服务器端口。
 
 ### 4. 获取实例 ID
 
@@ -102,18 +103,24 @@ docker compose logs javinfoapi
 docker compose up -d
 ```
 
-## 更新
+## 自动更新
 
-在 NAS 中重新拉取镜像并重新部署 Compose 项目即可。
+从包含 `updater` 的这个版本开始，系统每分钟检查一次官方正式版本。新版本的
+双架构镜像完成构建和校验后，更新器会自动下载并依次重建 JavInfoApi、JavHub，
+通常不需要用户手动操作。更新期间，原网页地址会显示维护状态和失败原因。
 
-命令行用户执行：
+从旧版首次升级到这个版本时，必须手动更新一次本仓库的完整 Compose 内容并
+重新部署，因为旧版尚未包含更新器。命令行用户执行：
 
 ```bash
+git pull
 docker compose pull
 docker compose up -d
 ```
 
-更新镜像不会删除已有配置和数据。
+后续更新由 `updater` 自动完成。更新器挂载 Docker Socket，因此拥有重建本项目
+容器所需的宿主机 Docker 管理权限；请只使用本官方仓库提供的 Compose 和镜像。
+自动更新不会执行 `docker compose down -v`，也不会删除已有配置和数据。
 
 从不带媒体兼容开关的旧版本升级后，该服务默认保持关闭。需要使用播放器时，请在“设置 → 媒体服务器”中手动开启一次。
 
@@ -125,7 +132,8 @@ docker compose up -d
 - `data`
 - `storage`
 
-请定期备份这三个目录，不要删除 `config`，否则实例身份可能丢失。
+请定期备份这三个目录，不要删除 `config`。其中包含实例 ID、设备私钥和授权
+缓存；删除或复制整个 `config` 都会改变本机授权的安全边界。
 
 其中 `data` 还保存固定 Cloudflare Tunnel 的隧道专用凭据；删除后将无法在容器更新或重建后自动恢复该 Tunnel。
 
@@ -137,6 +145,7 @@ docker compose up -d
 docker compose ps
 docker compose logs --tail=200 javhub
 docker compose logs --tail=200 javinfoapi
+docker compose logs --tail=200 updater
 ```
 
 如果镜像提示 `manifest unknown`，请确认使用的是最新版 `docker-compose.yml`，并检查 NAS 的 CPU 架构是否为 `amd64` 或 `arm64`。
