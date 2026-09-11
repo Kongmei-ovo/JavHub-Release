@@ -1,9 +1,10 @@
 name: javhub
 
 # ======================== 用户配置（只修改这里）========================
-# 首次部署前，请把下面两项改成你自己的强密码/随机字符串。
+# 首次部署前，请填写下面三项；项目目录必须使用宿主机绝对路径。
 x-db-password: &db-password "change-me-database-password"
 x-admin-token: &admin-token "change-me-admin-token"
+x-project-dir: &project-dir "/absolute/path/to/JavHub-Release"
 
 # 首次启动时保持为空。把日志中的 jvh- 实例 ID 发给发布者，
 # 收到激活码后粘贴到引号内，再执行：docker compose up -d
@@ -217,7 +218,7 @@ services:
     restart: unless-stopped
     environment:
       COMPOSE_PROJECT_NAME: javhub
-      JAVHUB_COMPOSE_FILES: ${PWD}/docker-compose.yml
+      JAVHUB_COMPOSE_FILES: docker-compose.yml
       JAVHUB_RELEASE_URL: https://www.javhub.quest/api/v1/release
       JAVHUB_UPSTREAM_URL: http://javhub:80
       JAVHUB_UPDATE_CHECK_INTERVAL: 60s
@@ -228,8 +229,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # 保持宿主机与容器内路径一致，使 Compose 的相对数据目录仍指向
       # 当前项目目录；config、data、storage 不会因 OTA 被删除。
-      - ${PWD}:${PWD}:ro
-    working_dir: ${PWD}
+      - type: bind
+        source: *project-dir
+        target: *project-dir
+        read_only: true
+    working_dir: *project-dir
     ports:
       - target: 8080
         published: *web-port
