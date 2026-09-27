@@ -101,6 +101,8 @@ services:
   javinfoapi:
     image: ghcr.io/kongmei-ovo/javinfoapi-protected:stable
     restart: unless-stopped
+    # Keep the API on the private Compose network. JavHub is its public entry
+    # point; publishing this port would bypass JavHub's authorization boundary.
     # worker/服务启动前执行幂等辅助迁移。全新空库尚无 derived_video 时，
     # 仅延后这一明确的目录迁移前置条件错误；其他迁移错误仍然致命。
     entrypoint: ["/bin/sh", "-c"]
