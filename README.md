@@ -10,6 +10,9 @@ JavHub 使用 Docker Compose 部署，支持群晖、飞牛、绿联、极空间
 
 复制本仓库 [`docker-compose.yml`](docker-compose.yml) 的全部内容，粘贴到 Compose 编辑框中。
 
+FlareSolverr 的空闲页面优化已包含在 Compose 启动命令中，使用官方镜像，
+无需下载额外文件、手动运行脚本或自行构建镜像。
+
 ### 2. 修改顶部配置
 
 只需要修改文件最上面的这几项：
@@ -17,10 +20,12 @@ JavHub 使用 Docker Compose 部署，支持群晖、飞牛、绿联、极空间
 ```yaml
 x-db-password: &db-password "请填写一个数据库密码"
 x-admin-token: &admin-token "请填写一个管理令牌"
+x-project-dir: &project-dir "/你的NAS上的绝对路径/JavHub-Release"
 x-license-key: &license-key ""
 ```
 
 - 数据库密码和管理令牌请自行填写，不要使用默认值。
+- `x-project-dir` 必须填写 NAS 上实际的 Compose 项目目录绝对路径。
 - 第一次启动时，激活码保持为空。
 - 网页端口默认是 `3000`，如有冲突可修改 `x-web-port`。
 - 媒体服务器端口默认是 `18090`，如有冲突可修改 `x-media-server-port`。
@@ -121,6 +126,27 @@ docker compose up -d
 后续更新由 `updater` 自动完成。更新器挂载 Docker Socket，因此拥有重建本项目
 容器所需的宿主机 Docker 管理权限；请只使用本官方仓库提供的 Compose 和镜像。
 自动更新不会执行 `docker compose down -v`，也不会删除已有配置和数据。
+
+### FlareSolverr 空闲负载优化
+
+新版 Compose 保留预热、定时保活及浏览器 Cookie，在每次请求取完 HTML 和 Cookie
+后切回空白页，停止目标页面的脚本、广告和动画。Chrome 仍常驻，仍有基础内存开销。
+
+从旧版升级这项优化时，只需更新完整 Compose 内容并重新创建 FlareSolverr。
+业务镜像的自动更新不会修改 Compose。本地命令行部署可执行：
+
+```bash
+git pull
+docker compose up -d --force-recreate flaresolverr
+```
+
+NAS 图形界面部署请更新 Compose 文本，然后重新创建 FlareSolverr。
+启动命令中的优化代码由容器自动执行，用户无需编辑或单独运行。
+
+如需回退，在 `flaresolverr.environment` 中将
+`JAVHUB_FLARESOLVERR_PARK_IDLE` 改为 `"false"`，然后重建该容器。
+`DISABLE_MEDIA` 默认保持 `"false"`；开启会屏蔽图片、CSS 和字体，需要先验证
+各站点解析及 Cloudflare 验证的兼容性。
 
 从不带媒体兼容开关的旧版本升级后，该服务默认保持关闭。需要使用播放器时，请在“设置 → 媒体服务器”中手动开启一次。
 

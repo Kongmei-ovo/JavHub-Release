@@ -137,10 +137,89 @@ services:
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     restart: unless-stopped
+    # 优化随 Compose 启动命令执行；无需额外文件或自建镜像。
+    command:
+      - /usr/local/bin/python
+      - -u
+      - -c
+      - |
+        """Keep FlareSolverr sessions warm, but unload pages between requests.
+
+        Run inside the upstream Python image; no cookies or profiles are copied out.
+        """
+        import functools
+        import logging
+        import os
+        import runpy
+        import sys
+        import threading
+
+
+        def install(service):
+            # FlareSolverr runs challenge logic in func_timeout's worker thread. A
+            # timed-out HTTP handler can return before that worker finishes unwinding.
+            # Keep a separate browser lock so neither session destruction nor another
+            # navigation can race its cleanup. Both locks must be reentrant because
+            # SessionsStorage.get calls create, which can call destroy.
+            command_lock = threading.RLock()
+            browser_lock = threading.RLock()
+
+            def serialized(function, lock):
+                @functools.wraps(function)
+                def wrapped(*args, **kwargs):
+                    with lock:
+                        return function(*args, **kwargs)
+                return wrapped
+
+            storage = service.SESSIONS_STORAGE
+            for name in ("get", "create", "destroy"):
+                setattr(storage, name, serialized(getattr(storage, name), browser_lock))
+
+            original_logic = service._evil_logic
+
+            @functools.wraps(original_logic)
+            def solve_and_park(req, driver, method):
+                with browser_lock:
+                    try:
+                        return original_logic(req, driver, method)
+                    finally:
+                        if req.session:
+                            # The result already contains HTML and cookies. Navigation
+                            # unloads page timers/ads without destroying the browser's
+                            # cookies, local storage or clearance session.
+                            try:
+                                previous_timeout = driver.timeouts.page_load
+                                try:
+                                    driver.set_page_load_timeout(5)
+                                    driver.get("about:blank")
+                                finally:
+                                    driver.set_page_load_timeout(previous_timeout)
+                            except Exception:
+                                # Parking failure must not replace a successful result
+                                # or hide the original challenge error.
+                                logging.warning("FlareSolverr could not park idle browser", exc_info=True)
+
+            service._evil_logic = solve_and_park
+            service._controller_v1_handler = serialized(
+                service._controller_v1_handler, command_lock
+            )
+
+
+        if __name__ == "__main__":
+            sys.path.insert(0, "/app")
+            import flaresolverr_service
+
+            if os.environ.get("JAVHUB_FLARESOLVERR_PARK_IDLE", "true").lower() == "true":
+                install(flaresolverr_service)
+            runpy.run_path("/app/flaresolverr.py", run_name="__main__")
     mem_limit: 768m
     environment:
       LOG_LEVEL: info
       TZ: *timezone
+      # 设为 "false" 可关闭空闲切页；Chrome 会话仍按原有逻辑保活。
+      JAVHUB_FLARESOLVERR_PARK_IDLE: "true"
+      # 会屏蔽图片、CSS 和字体，先验证站点兼容性再开启。
+      DISABLE_MEDIA: "false"
 
   avdb:
     image: leolitaly/avdb:latest
