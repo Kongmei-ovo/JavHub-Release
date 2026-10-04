@@ -1,0 +1,12 @@
+# Manual/legacy deployment only: combine with docker-compose.legacy.yml.
+# Managed deployment provides Tunnel configuration inside the application.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      javhub:
+        condition: service_started
+    networks:
+      - default

@@ -1,0 +1,6 @@
+# Compatibility override: the default Compose already installs protected
+# services through the gateway. No extra containers are defined here.
+services:
+  updater:
+    environment:
+      JAVHUB_MANAGED_DEPLOYMENT: "true"

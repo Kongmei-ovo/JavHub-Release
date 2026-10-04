@@ -1,177 +1,86 @@
 # JavHub 安装教程
 
-JavHub 使用 Docker Compose 部署，支持群晖、飞牛、绿联、极空间、1Panel、Portainer 等带有 Compose 功能的 NAS 或服务器。
+默认 `docker-compose.yml` 只启动独立入口，组件、数据库和授权在网页里配置。
+支持带 Compose 功能的 NAS 或服务器；后续一般不再需要修改 Compose。
 
-## NAS 安装（推荐）
+## 新安装
 
-### 1. 新建 Compose 项目
+1. 新建 Compose 项目，复制 [docker-compose.yml](docker-compose.yml)。
+2. 将顶部 `x-project-dir` 改成 NAS 上实际的项目绝对路径；按需调整网页端口（默认 3000）和媒体端口（默认 18090）。
+3. 保存并启动，然后访问 `http://NAS的IP:3000`。
+4. 从 `updater` 日志复制首次配对码，在网页设置部署管理员密码。
+5. 选择可选组件并安装。数据库密码和内部管理令牌可留空自动生成；激活码也可稍后填写。
+6. 安装后在网页取得实例 ID，申请激活码，再保存。看到“JavHub 已就绪，可以开始使用”后，点击“进入 JavHub”。
 
-打开 NAS 的 Docker 管理界面，新建一个 Compose 项目。
+命令行用户在项目目录中执行：
 
-复制本仓库 [`docker-compose.yml`](docker-compose.yml) 的全部内容，粘贴到 Compose 编辑框中。
-
-FlareSolverr 的空闲页面优化已包含在 Compose 启动命令中，使用官方镜像，
-无需下载额外文件、手动运行脚本或自行构建镜像。
-
-### 2. 修改顶部配置
-
-只需要修改文件最上面的这几项：
-
-```yaml
-x-db-password: &db-password "请填写一个数据库密码"
-x-admin-token: &admin-token "请填写一个管理令牌"
-x-project-dir: &project-dir "/你的NAS上的绝对路径/JavHub-Release"
-x-license-key: &license-key ""
+```sh
+docker compose up -d
+docker compose logs updater
 ```
 
-- 数据库密码和管理令牌请自行填写，不要使用默认值。
-- `x-project-dir` 必须填写 NAS 上实际的 Compose 项目目录绝对路径。
-- 第一次启动时，激活码保持为空。
-- 网页端口默认是 `3000`，如有冲突可修改 `x-web-port`。
-- 媒体服务器端口默认是 `18090`，如有冲突可修改 `x-media-server-port`。
+完成后再次打开原地址直接进入主程序。组件管理仍可从“设置 → 基础服务”打开。
+`docker-compose.bootstrap.yml` 保留为同样的入口安装方案。
 
-文件下面的其他内容不需要修改。
+## 已有用户升级
 
-### 3. 启动项目
+原 Compose 中的通用服务配置由官方模板接管，个人密码、授权和集成配置继续保留。
+迁移不会重新创建数据库数据、改变原数据挂载或要求重新导入影片资料。
 
-保存并启动 Compose 项目，等待镜像下载和容器启动完成。新版 Compose 会额外
-启动一个很小的 `updater` 更新网关，并由它占用网页和媒体服务器端口。
+首次迁移前备份原 Compose、`.env`、`config`、`data`、`storage` 和原数据卷。
+保持原 Compose 项目名称和项目目录，不要新建另一个项目。
 
-### 4. 获取实例 ID
+1. 原部署有入口时，只将 Compose 替换成新版入口文件，保留原项目名称、目录和对外端口。
+2. 只更新入口：`docker compose pull updater`，再执行 `docker compose up -d updater`。
+3. 打开网页设置部署管理员。检测到原容器时会自动勾选“接管已有部署”。确认后沿用旧数据库密码、授权、挂载和网络。
+4. 检查显示的配置，保存并应用。之后由入口管理基础服务和可选组件。
 
-打开 `javinfoapi` 容器的日志，找到以 `jvh-` 开头的实例 ID，并将完整内容发给发布者申请激活码。
+**不要执行 `down -v`，不要选择删除孤立容器/数据卷。** 新入口通过同一项目内已有容器
+取得原个人配置，即使旧 Compose 已被替换，也可识别原数据卷。容器可以处于停止状态。
+如果旧入口不具备管理功能，需要本次发布后手动拉取新版入口一次。
 
-### 5. 填写激活码
+原部署没有入口、网页端口由 `javhub` 占用时，先用原 Compose 执行
+`docker compose stop javhub` 释放端口，保留容器和数据，然后再更换文件启动入口。
 
-收到激活码后，重新编辑 Compose，把激活码填入：
+已经使用新版并生成 `.javhub` 的用户无需再次接管；更新入口后自动加载原个人配置。
+仅在应用设置中填写过的 AVDB API Key，可在组件管理中补填，或连接已有 AVDB 账号获取专用 Key。
 
-```yaml
-x-license-key: &license-key "你的激活码"
-```
+接管目前支持官方单实例服务组合。自定义服务、外部独立数据库、特殊容器权限或已删除
+原容器的部署需要按原配置迁移；入口会在修改容器前说明不支持的原因，避免误建空库。
+保留的 [docker-compose.legacy.yml](docker-compose.legacy.yml) 是旧完整布局参考，
+不能用它的默认密码覆盖自己原来的配置。
 
-保存并重新部署项目，然后访问：
+## 配置与组件
 
-```text
-http://NAS的IP:3000
-```
+AVDB 可选择不使用、本机安装或连接已有服务。本机模式可在引导里创建首次账号或登录
+已有账号取得专用 Key；停用会停止容器并保留数据。FlareSolverr 内存、空闲页面优化等
+配置保存后自动应用，只重建受影响服务。
+
+启用自动更新后，入口接收官方应用、部署模板和自身的新版本。更新期间网页会显示进度，
+失败会显示原因。个人配置独立保存在 `.javhub`，无需追着官方模板修改 Compose。
 
 ## 媒体兼容服务
 
-如需使用 Emby、Infuse、VidHub 或 SenPlayer 连接 JavHub：
+在“设置 → 媒体服务器”开启媒体兼容服务。Emby、Infuse、VidHub 或 SenPlayer 使用
+`http://NAS的IP:18090`，用户名和密码使用 JavHub 中创建的播放用户。
+媒体端口可以在 Compose 中修改，修改后播放器也需要使用新地址。
 
-1. 登录 JavHub，进入“设置 → 媒体服务器”。
-2. 打开“启用媒体兼容服务”并保存。
-3. 在播放器中填写 NAS IP 和媒体服务器端口，例如：
+Cloudflare Quick Tunnel 和固定 Tunnel 可直接在设置中创建，无需添加 `cloudflared` 容器。
+固定 Tunnel 凭据随 `data` 挂载保存，更新后可恢复。
 
-   ```text
-   http://NAS的IP:18090
-   ```
+## 数据与排查
 
-播放器用户名和密码使用 JavHub 中创建的播放用户。
+备份 `.javhub`、`config`、`data`、`storage` 以及已有命名数据卷；其中包含密码、
+设备身份和授权缓存，不要公开分享或提交仓库。停用组件不会删除数据。
 
-`x-media-server-port` 是 NAS/宿主机对外提供的媒体端口。如果修改了它，重新创建 `javhub` 容器后，播放器地址也要使用修改后的端口。JavHub 设置页中的服务端口保持 `18090`，通常无需修改。
-
-### Cloudflare 远程访问
-
-媒体服务器设置中提供两种仅面向 Emby 兼容服务的远程入口：无需账号和域名的临时 Quick Tunnel，以及通过 Cloudflare 授权创建的固定 Tunnel 地址。创建后，将设置页显示的 HTTPS 地址填入播放器。
-
-无需修改本仓库的 Compose，也不要另外添加 `cloudflared` 容器。`cloudflared` 已内嵌在 `javhub-protected` 镜像中，由 JavHub 作为子进程启动和管理。Tunnel 只要求容器能够出站访问 HTTPS；不需要新增宿主机端口、`network_mode: host`、Docker Socket 或 `privileged` 权限。
-
-Tunnel 使用的 Emby 专用内部源站为 `127.0.0.1:8096`，只能在 `javhub` 容器内部访问，绝不能映射到宿主机。现有的 `x-media-server-port`（默认 `18090`）映射只是局域网播放器入口，可以继续保留，但与 Cloudflare Tunnel 无关。
-
-固定 Tunnel 的隧道专用凭据保存在现有的 `./data:/app/data` 挂载中。请勿删除或移除该挂载；更新镜像或重新创建容器后，JavHub 会从其中自动恢复固定 Tunnel。
-
-## 命令行安装
-
-如果使用普通 Linux 服务器：
-
-```bash
-git clone https://github.com/Kongmei-ovo/JavHub-Release.git
-cd JavHub-Release
-```
-
-编辑 `docker-compose.yml` 顶部的数据库密码和管理令牌，然后启动：
-
-```bash
-docker compose up -d
-```
-
-获取实例 ID：
-
-```bash
-docker compose logs javinfoapi
-```
-
-收到激活码后填入 `x-license-key`，再执行：
-
-```bash
-docker compose up -d
-```
-
-## 自动更新
-
-从包含 `updater` 的这个版本开始，系统每分钟检查一次官方正式版本。新版本的
-双架构镜像完成构建和校验后，更新器会自动下载并依次重建 JavInfoApi、JavHub，
-通常不需要用户手动操作。更新期间，原网页地址会显示维护状态和失败原因。
-
-从旧版首次升级到这个版本时，必须手动更新一次本仓库的完整 Compose 内容并
-重新部署，因为旧版尚未包含更新器。命令行用户执行：
-
-```bash
-git pull
-docker compose pull
-docker compose up -d
-```
-
-后续更新由 `updater` 自动完成。更新器挂载 Docker Socket，因此拥有重建本项目
-容器所需的宿主机 Docker 管理权限；请只使用本官方仓库提供的 Compose 和镜像。
-自动更新不会执行 `docker compose down -v`，也不会删除已有配置和数据。
-
-### FlareSolverr 空闲负载优化
-
-新版 Compose 保留预热、定时保活及浏览器 Cookie，在每次请求取完 HTML 和 Cookie
-后切回空白页，停止目标页面的脚本、广告和动画。Chrome 仍常驻，仍有基础内存开销。
-
-从旧版升级这项优化时，只需更新完整 Compose 内容并重新创建 FlareSolverr。
-业务镜像的自动更新不会修改 Compose。本地命令行部署可执行：
-
-```bash
-git pull
-docker compose up -d --force-recreate flaresolverr
-```
-
-NAS 图形界面部署请更新 Compose 文本，然后重新创建 FlareSolverr。
-启动命令中的优化代码由容器自动执行，用户无需编辑或单独运行。
-
-如需回退，在 `flaresolverr.environment` 中将
-`JAVHUB_FLARESOLVERR_PARK_IDLE` 改为 `"false"`，然后重建该容器。
-`DISABLE_MEDIA` 默认保持 `"false"`；开启会屏蔽图片、CSS 和字体，需要先验证
-各站点解析及 Cloudflare 验证的兼容性。
-
-从不带媒体兼容开关的旧版本升级后，该服务默认保持关闭。需要使用播放器时，请在“设置 → 媒体服务器”中手动开启一次。
-
-## 数据目录
-
-配置和数据都保存在 Compose 项目目录中：
-
-- `config`
-- `data`
-- `storage`
-
-请定期备份这三个目录，不要删除 `config`。其中包含实例 ID、设备私钥和授权
-缓存；删除或复制整个 `config` 都会改变本机授权的安全边界。
-
-其中 `data` 还保存固定 Cloudflare Tunnel 的隧道专用凭据；删除后将无法在容器更新或重建后自动恢复该 Tunnel。
-
-## 无法启动
-
-先查看容器状态和日志：
-
-```bash
-docker compose ps
-docker compose logs --tail=200 javhub
-docker compose logs --tail=200 javinfoapi
+```sh
 docker compose logs --tail=200 updater
+docker ps --filter label=com.docker.compose.project=javhub
 ```
 
-如果镜像提示 `manifest unknown`，请确认使用的是最新版 `docker-compose.yml`，并检查 NAS 的 CPU 架构是否为 `amd64` 或 `arm64`。
+基础服务由入口生成的 `.javhub/compose.json` 管理，默认 Compose 仅列出入口。
+也可在网页查看组件状态。将上面的 `javhub` 换成自己的项目名。
+
+安装、接管与恢复细节见 [安装与组件管理](docs/deployment-manager.md)。
+默认入口也兼容 `docker-compose.protected.yml`。`docker-compose.cloudflare.yml`
+仅供保留完整服务的旧部署叠加使用，不能叠加到新版入口文件。

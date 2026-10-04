@@ -1,5 +1,3 @@
-# Default deployment: gateway only. Existing users retain the original
-# project name and data directories, then choose adoption in the web UI.
 name: javhub
 
 x-project-dir: &project-dir "/absolute/path/to/JavHub-Release"
@@ -12,7 +10,7 @@ services:
     restart: unless-stopped
     environment:
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-javhub}
-      JAVHUB_COMPOSE_FILES: docker-compose.yml
+      JAVHUB_COMPOSE_FILES: docker-compose.bootstrap.yml
       JAVHUB_MANAGED_DEPLOYMENT: "true"
       JAVHUB_PROJECT_DIR: *project-dir
       JAVHUB_RELEASE_URL: https://www.javhub.quest/api/v1/release

@@ -5,3 +5,4 @@ storage/
 backups/
 *.log
 .DS_Store
+.javhub/
